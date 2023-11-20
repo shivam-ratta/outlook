@@ -86,11 +86,12 @@ const OutlookMail = () => {
       setIsSearched(false)
       getFolder(accessToken)
       let messagesUrl = 'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages';
+      if(!timeFilter.length && !searchSubject.length) {
+        setMessages([])
+        return
+      }
       if (searchSubject.length) {
         const encodedSearchSubject = encodeURIComponent(searchSubject);
-        const filterDate = moment().subtract(timeFilter, 'hours').toISOString();
-        ;
-
         messagesUrl = `${messagesUrl}?$search="subject:${encodedSearchSubject} OR from:${encodedSearchSubject}"`;
         setIsSearched(true);
       }
@@ -104,8 +105,9 @@ const OutlookMail = () => {
 
       await axios.get(messagesUrl, { headers }).then((res) => {
         if (res?.data?.value) {
-          console.log('res.data.value', res.data.value)
+          // console.log('res.data.value', res.data.value)
           if (timeFilter.length) {
+            setIsSearched(true);
             let filter = ''
             if (timeFilter == '24hours') {
               filter = moment().subtract(24, 'hours').valueOf()
@@ -185,7 +187,7 @@ const OutlookMail = () => {
 
   useEffect(() => {
     if (!!localStorage.getItem(process.env.REACT_APP_TOKEN)) {
-      getMessages(localStorage.getItem(process.env.REACT_APP_TOKEN));
+      // getMessages(localStorage.getItem(process.env.REACT_APP_TOKEN));
       setToken(localStorage.getItem(process.env.REACT_APP_TOKEN));
     } else {
       setToken('')
@@ -329,7 +331,7 @@ const OutlookMail = () => {
 
               {/* Messages Section */}
               <div className="w-100 px-0 bg-light shadow" style={{ minHeight: '100vh' }}>
-                {messages.length > 0 ? messages.map((el, i) => (
+                {messages.length > 0 && messages.map((el, i) => (
                   <div className="message-item border-bottom text-start p-3 d-flex align-items-center justify-content-center" key={i}>
                     <div className="col-1 d-flex align-items-center justify-content-center">
                       <div className="form-check">
@@ -345,7 +347,8 @@ const OutlookMail = () => {
                       <div className="text-sm text-ellipsis">{el?.bodyPreview || 'No body'}</div>
                     </div>
                   </div>
-                )) : <div className="message-item border-bottom text-start p-3">
+                ))} 
+                {messages.length == 0 && isSearched && <div className="message-item border-bottom text-start p-3">
                   <div className="d-flex align-items-center justify-content-center">
                     <div className="col-12">
                       <div className="text-sm row">
@@ -353,7 +356,18 @@ const OutlookMail = () => {
                       </div>
                     </div>
                   </div>
-                </div>}
+                </div>
+                }
+                {messages.length == 0 && !isSearched && <div className="message-item border-bottom text-start p-3">
+                  <div className="d-flex align-items-center justify-content-center">
+                    <div className="col-12">
+                      <div className="text-sm row">
+                        <div className="col-12 text-center">Search Email</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                }
               </div>
             </div>
 
