@@ -25,6 +25,21 @@ code {
 .searchInput {
   width: 350px!important;
 }
+.cursor-pointer {
+  cursor: pointer ;
+}
+
+.user-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  width: 40px;
+}
+
+.user-icon-btn::after {
+  display: none!important;
+}
 
 @media only screen and (max-width:991px) {
   .searchInput {
