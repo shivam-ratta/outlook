@@ -1,15 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import axios from 'axios';
 import MicrosoftLogin from "react-microsoft-login";
 import moment from 'moment';
 import LoadingBar from 'react-top-loading-bar';
+import Api from '../api';
+import UserContext from '../context/UserContext';
 
 
 const OutlookMail = () => {
   // Replace these values with your app's credentials
   const clientId = process.env.REACT_APP_CLIENT_ID;
   const redirectUri = 'http://localhost:3000'; // Set this in your Azure AD App registration
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [searchSubject, setSearchSubject] = useState('')
   const [messages, setMessages] = useState([])
   const [isSearched, setIsSearched] = useState(false)
@@ -24,14 +25,18 @@ const OutlookMail = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(0);
 
+  
+  const userContext = useContext(UserContext);
+
   const getFolder = async (accessToken) => {
     setSelectedFolder('')
-    let folderUrl = isAdmin ? `https://graph.microsoft.com/v1.0/users/${selectedUser.id}/mailFolders` : 'https://graph.microsoft.com/v1.0/me/mailFolders';
-    const headers = {
-      'Authorization': `Bearer ${accessToken}`,
-      'Accept': 'application/json',
-    };
-    axios.get(folderUrl, { headers }).then((res) => {
+    let promise;
+    if(isAdmin) {
+      promise =  Api.getFolders(selectedUser?.id)
+    } else {
+      promise = Api.getFolders()
+    }
+    promise.then((res) => {
       if (res?.data?.value?.length) {
         setFolders(res.data.value)
           setSelectedFolder(res.data.value.find((el) => el?.displayName === "Inbox"))
@@ -45,14 +50,8 @@ const OutlookMail = () => {
     });
   }
 
-  const getUsers = async (accessToken) => {
-    const getUsersUrl = 'https://graph.microsoft.com/v1.0/users';
-    const headers = {
-      'Authorization': `Bearer ${accessToken}`,
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-    };
-    axios.get(getUsersUrl, { headers })
+  const getUsers = async () => {
+    Api.getUsers()
       .then(response => {
         if (response?.data?.value) {
           console.log('List of users:', response.data.value);
@@ -79,14 +78,14 @@ const OutlookMail = () => {
     }
     try {
       setIsSearched(false)
-      let messagesUrl = isAdmin ? `https://graph.microsoft.com/v1.0/users/${selectedUser.id}/mailFolders/${selectedFolder.id}/messages` : `https://graph.microsoft.com/v1.0/me/mailFolders/${selectedFolder.id}/messages`;
-      const headers = {
-        'Authorization': `Bearer ${accessToken}`,
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      };
+      let promise;
+      if(isAdmin) {
+        promise =  Api.getMessages(selectedUser?.id, selectedFolder?.id)
+      } else {
+        promise = Api.getMessages(selectedFolder?.id)
+      }
 
-      await axios.get(messagesUrl, { headers }).then((res) => {
+      await promise.then((res) => {
         if (res?.data?.value) {
           if (timeFilter.length) {
             let filter = ''
@@ -109,9 +108,7 @@ const OutlookMail = () => {
         }
       }).catch((err) => {
         console.log("err", err.response.data.error)
-        if (err.response.data.error.code === 'InvalidAuthenticationToken') {
-          logout()
-        }
+        
       });
 
     } catch (error) {
@@ -127,27 +124,14 @@ const OutlookMail = () => {
     }
     try {
       setIsSearched(true)
-      let messagesUrl = isAdmin ? `https://graph.microsoft.com/v1.0/users/${selectedUser.id}/messages` : `https://graph.microsoft.com/v1.0/me/messages`;
-
-      if (searchSubject.length) {
-        const encodedSearchSubject = encodeURIComponent(searchSubject);
-        messagesUrl = `${messagesUrl}?$search="subject:${encodedSearchSubject} OR from:${encodedSearchSubject}"`;
+      const encodedSearchSubject = encodeURIComponent(searchSubject);
+      let promise;
+      if(isAdmin) {
+        promise =  Api.searchMessages(selectedUser?.id, encodedSearchSubject)
+      } else {
+        promise = Api.searchMessages(encodedSearchSubject)
       }
-
-      // if (searchSubject.length) {
-      //   const encodedSearchSubject = encodeURIComponent(searchSubject);
-      //   messagesUrl = `https://graph.microsoft.com/v1.0/users/messages?$search="mail:${encodedSearchSubject}"`;
-      // }
-
-
-      const headers = {
-        'Authorization': `Bearer ${accessToken}`,
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'ConsistencyLevel': 'eventual',
-      };
-
-      await axios.get(messagesUrl, { headers }).then((res) => {
+      await promise.then((res) => {
         if (res?.data?.value) {
           if (timeFilter.length) {
             let filter = ''
@@ -170,9 +154,6 @@ const OutlookMail = () => {
         }
       }).catch((err) => {
         console.log("err", err.response.data.error)
-        if (err.response.data.error.code === 'InvalidAuthenticationToken') {
-          logout()
-        }
       });
 
     } catch (error) {
@@ -180,7 +161,7 @@ const OutlookMail = () => {
     }
   };
 
-  const moveToTrash = (accessToken) => {
+  const moveToTrash = () => {
     if (window.confirm('Are you sure you want to these emails to trash?')) {
       const messageIds = selectedMessages.map((el) => messages[el].id);
 
@@ -188,16 +169,12 @@ const OutlookMail = () => {
         destinationId: trashFolderId,
       };
 
-      // Set up Axios headers
-      const moveHeaders = {
-        'Authorization': `Bearer ${accessToken}`,
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      };
-
       const movePromises = messageIds.map((messageId) => {
-        const moveMessagesUrl = isAdmin ? `https://graph.microsoft.com/v1.0/users/${selectedUser.id}/messages/${messageId}/move` : `https://graph.microsoft.com/v1.0/me/messages/${messageId}/move`;
-        return axios.post(moveMessagesUrl, moveBody, { headers: moveHeaders });
+        if(isAdmin) {
+          return Api.moveToFolder(selectedUser.id, messageId, moveBody)
+        } else {
+          return Api.moveToFolder(messageId, moveBody)
+        }
       });
 
       axios.all(movePromises)
@@ -226,24 +203,20 @@ const OutlookMail = () => {
     }
   };
 
-  const moveToFolder = (id, accessToken) => {
-    if (window.confirm('Are you sure you want to these emails?')) {
+  const moveToFolder = (id) => {
+    const folderName = folders.find((el) => el.id == id)?.displayName
+    if (window.confirm(`Are you sure you want to these ${folderName}?`)) {
       const messageIds = selectedMessages.map((el) => messages[el].id);
 
       const moveBody = {
         destinationId: id,
       };
-
-      // Set up Axios headers
-      const moveHeaders = {
-        'Authorization': `Bearer ${accessToken}`,
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      };
-
       const movePromises = messageIds.map((messageId) => {
-        const moveMessagesUrl = isAdmin ? `https://graph.microsoft.com/v1.0/users/${selectedUser.id}/messages/${messageId}/move` : `https://graph.microsoft.com/v1.0/me/messages/${messageId}/move`;
-        return axios.post(moveMessagesUrl, moveBody, { headers: moveHeaders });
+        if(isAdmin) {
+          return Api.moveToFolder(selectedUser.id, messageId, moveBody)
+        } else {
+          return Api.moveToFolder(messageId, moveBody)
+        }
       });
 
       axios.all(movePromises)
@@ -275,11 +248,11 @@ const OutlookMail = () => {
 
   useEffect(() => {
     if (!!localStorage.getItem(process.env.REACT_APP_TOKEN)) {
-      getUsers(localStorage.getItem(process.env.REACT_APP_TOKEN))
-      setToken(localStorage.getItem(process.env.REACT_APP_TOKEN));
-      checkAdminRole(localStorage.getItem(process.env.REACT_APP_TOKEN))
+      getUsers()
+      userContext.update(localStorage.getItem(process.env.REACT_APP_TOKEN));
+      checkAdminRole()
     } else {
-      setToken('')
+      userContext.update('')
     }
   }, [])
 
@@ -288,23 +261,15 @@ const OutlookMail = () => {
     if (data?.accessToken) {
       localStorage.setItem(process.env.REACT_APP_TOKEN, data.accessToken)
       localStorage.setItem(process.env.REACT_APP_USER_ID, data.uniqueId)
-      setToken(data.accessToken);
-      setIsLoggedIn(true)
-      checkAdminRole(data.accessToken);
-      getUsers(data.accessToken)
+      userContext.update(data.accessToken);
+      checkAdminRole();
+      getUsers()
     }
   };
 
-  const checkAdminRole = (accessToken) => {
-    const getUsersUrl = 'https://graph.microsoft.com/v1.0/me/memberOf';
-    const headers = {
-      'Authorization': `Bearer ${accessToken}`,
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-    };
-    axios.get(getUsersUrl, { headers })
+  const checkAdminRole = () => {
+    Api.checkAdminRole()
       .then(response => {
-        console.log('checkAdminRole', response?.data);
         if (response?.data.value?.length && response?.data.value[0].displayName === "Global Administrator") {
           setIsAdmin(true)
         } else {
@@ -321,8 +286,16 @@ const OutlookMail = () => {
   const logout = () => {
     localStorage.removeItem(process.env.REACT_APP_TOKEN)
     setToken('')
-    setIsLoggedIn(false)
   }
+
+  useEffect(() => {
+    console.log('userContext updated', userContext)
+    if(userContext.token == '') {
+      logout()
+    } else {
+      setToken(userContext.token)
+    }
+  }, [userContext])
 
   useEffect(() => {
     if (selectedUser?.id) {
@@ -341,12 +314,6 @@ const OutlookMail = () => {
       getMessages(token)
       setSearchSubject('')
       setTimeFilter('')
-
-      // if (isSearched) {
-      //   searchMessages(token)
-      // } else {
-      //   getMessages(token)
-      // }
     }
   }, [selectedFolder])
 
@@ -461,23 +428,18 @@ const OutlookMail = () => {
                           </button>
                         </div>
                         {selectedMessages.length > 0 && selectedFolder.displayName !== 'Deleted Items' && <div className="d-inline-block my-2 ">
-                          <button onClick={() => moveToTrash(token)} className='btn btn-danger me-2'>
+                          <button onClick={() => moveToTrash()} className='btn btn-danger me-2'>
                             <i className='fa fa-trash me-2'></i> Trash
                           </button>
                         </div>}
                         {selectedMessages.length > 0 && selectedFolder.displayName == 'Deleted Items' && <div className="d-inline-block me-2 floatingSelect my-2 ">
-                        <select className="form-select mb-0" onChange={(e) => { moveToFolder(e.target.value, token) }} id="floatingSelect" aria-label="Floating label select example">
+                        <select className="form-select mb-0" onChange={(e) => { moveToFolder(e.target.value) }} id="floatingSelect" aria-label="Floating label select example">
                             <option value="">Move to</option>
-                            {folders.length > 0 && folders.map((el, i) => (
+                            {folders.length > 0 && folders.filter((el) => el.displayName !== "Deleted Items").map((el, i) => (
                             <option value={el?.id} key={i}>{el?.displayName}</option>
                             ))}
                           </select>
                         </div>}
-                        <div className="d-inline-block my-2 ">
-                          <button onClick={logout} className='btn btn-danger me-2'>
-                            Logout
-                          </button>
-                        </div>
 
                         <div className="d-inline-block my-2 me-2">
                           <select className="form-select floatingSelect mb-0" onChange={(e) => { setTimeFilter(e.target.value) }} id="" aria-label="Floating label select example">
@@ -508,6 +470,11 @@ const OutlookMail = () => {
                                     })}
                                   </select>
                                 </div>
+                              </li>
+                              <li className="dropdown-item">
+                              <button onClick={logout} className='btn btn-danger me-2'>
+                            Logout
+                          </button>
                               </li>
                             </ul>
                           </div>}

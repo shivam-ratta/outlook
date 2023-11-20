@@ -1,11 +1,13 @@
-
-import './App.css';
-import OutlookMail from './components/OutlookMail';
+import "./App.css";
+import OutlookMail from "./components/OutlookMail";
+import UserState from "./context/UserState";
 
 function App() {
   return (
     <div className="App">
-      <OutlookMail />
+      <UserState>
+        <OutlookMail />
+      </UserState>
     </div>
   );
 }
