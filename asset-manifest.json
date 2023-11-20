@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/outlook/static/css/main.52429dad.css",
-    "main.js": "/outlook/static/js/main.1fc5e26c.js",
+    "main.css": "/outlook/static/css/main.66d940c5.css",
+    "main.js": "/outlook/static/js/main.129a0de2.js",
     "static/js/787.e66d38ad.chunk.js": "/outlook/static/js/787.e66d38ad.chunk.js",
     "index.html": "/outlook/index.html",
-    "main.52429dad.css.map": "/outlook/static/css/main.52429dad.css.map",
-    "main.1fc5e26c.js.map": "/outlook/static/js/main.1fc5e26c.js.map",
+    "main.66d940c5.css.map": "/outlook/static/css/main.66d940c5.css.map",
+    "main.129a0de2.js.map": "/outlook/static/js/main.129a0de2.js.map",
     "787.e66d38ad.chunk.js.map": "/outlook/static/js/787.e66d38ad.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.52429dad.css",
-    "static/js/main.1fc5e26c.js"
+    "static/css/main.66d940c5.css",
+    "static/js/main.129a0de2.js"
   ]
 }
