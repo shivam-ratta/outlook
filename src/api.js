@@ -1,23 +1,21 @@
 import * as sweetalert from "sweetalert";
 import axios from "axios";
-import UserContext from "./context/UserContext";
-import { useContext } from "react";
 
 const baseURL = process.env.REACT_APP_API_URL;
 
-const accessToken = localStorage.getItem(process.env.REACT_APP_TOKEN);
+const accessToken = () => {return localStorage.getItem(process.env.REACT_APP_TOKEN)}
 
 const instance = axios.create({
   baseURL: baseURL,
   headers: {
-    Authorization: `Bearer ${accessToken}`,
+    Authorization: `Bearer ${accessToken()}`,
     Accept: "application/json",
     "Content-Type": "application/json",
   },
 });
 
 instance.interceptors.request.use((config) => {
-  const token = accessToken;
+  const token = accessToken();
   if (token && config.headers) config.headers.Authorization = `Bearer ${token}`;
   config.validateStatus = (status) => status < 400;
   return config;
@@ -25,10 +23,6 @@ instance.interceptors.request.use((config) => {
 
 instance.interceptors.response.use(
   (successRes) => {
-    console.log("successRes", successRes);
-    // if (successRes?.data === 'Error: jwt expired') {
-    //   localStorage.removeItem('lls-userinfo');
-    // }
     return successRes;
   },
   (error) => {
@@ -48,10 +42,9 @@ instance.interceptors.response.use(
         },
       },
     });
-    if (error.response.data.error.code === "InvalidAuthenticationToken") {
+    if (error.response.status == 401) {
       localStorage.removeItem(process.env.REACT_APP_TOKEN);
-      const userContext = useContext(UserContext);
-      userContext.update("");
+      window.location.reload()
     }
     console.log("caught error", error);
     return Promise.reject(error);
@@ -65,32 +58,27 @@ const Api = {
   checkAdminRole: async () => {
     return await instance.get(`/me/memberOf`);
   },
-  searchMessages: async (userId = undefined, encodedSearchSubject) => {
+  searchMessages: async (encodedSearchSubject, userId = undefined,) => {
+    console.log('encodedSearchSubject',encodedSearchSubject)
     if (userId) {
       return await instance.get(
         `/users/${userId}/messages?$search="subject:${encodedSearchSubject} OR from:${encodedSearchSubject}"`
       );
-    }
-    return await instance.get(
-      `/me/messages?$search="subject:${encodedSearchSubject} OR from:${encodedSearchSubject}"`
-    );
-  },
-
-  getMessages: async (userId = undefined, folderId) => {
-    if (userId) {
+    } else {
       return await instance.get(
-        `/users/${userId}/mailFolders/${folderId}/messages`
+        `/me/messages?$search="subject:${encodedSearchSubject} OR from:${encodedSearchSubject}"`
       );
     }
-    return await instance.get(`/me/mailFolders/${folderId}/messages`);
   },
-  getFolders: async (userId = undefined, folderId) => {
+
+ 
+  getFolders: async (userId = undefined) => {
     if (userId) {
       return await instance.get(`/users/${userId}/mailFolders`);
     }
     return await instance.get(`/me/mailFolders`);
   },
-  moveToFolder: async (userId = undefined, messageId, payload) => {
+  moveToFolder: async ( messageId, payload, userId = undefined,) => {
     if (userId) {
       return await instance.post(
         `/users/${userId}/messages/${messageId}/move`,
