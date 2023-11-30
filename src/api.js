@@ -43,8 +43,8 @@ instance.interceptors.response.use(
       },
     });
     if (error.response.status == 401) {
-      localStorage.removeItem(process.env.REACT_APP_TOKEN);
-      window.location.reload()
+      // localStorage.removeItem(process.env.REACT_APP_TOKEN);
+      // window.location.reload()
     }
     console.log("caught error", error);
     return Promise.reject(error);
@@ -58,17 +58,11 @@ const Api = {
   checkAdminRole: async () => {
     return await instance.get(`/me/memberOf`);
   },
-  searchMessages: async (encodedSearchSubject, userId = undefined,) => {
+  searchMessages: async (encodedSearchSubject, userId) => {
     console.log('encodedSearchSubject',encodedSearchSubject)
-    if (userId) {
       return await instance.get(
         `/users/${userId}/messages?$search="subject:${encodedSearchSubject} OR from:${encodedSearchSubject}"`
-      );
-    } else {
-      return await instance.get(
-        `/me/messages?$search="subject:${encodedSearchSubject} OR from:${encodedSearchSubject}"`
-      );
-    }
+      )
   },
 
  
@@ -78,14 +72,11 @@ const Api = {
     }
     return await instance.get(`/me/mailFolders`);
   },
-  moveToFolder: async ( messageId, payload, userId = undefined,) => {
-    if (userId) {
+  moveToFolder: async ( messageId, payload, userId,) => {
       return await instance.post(
         `/users/${userId}/messages/${messageId}/move`,
         payload
       );
-    }
-    return await instance.post(`/me/messages/${messageId}/move`, payload);
   },
 };
 
