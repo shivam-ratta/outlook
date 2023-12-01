@@ -5,9 +5,7 @@ import UserState from "./context/UserState";
 function App() {
   return (
     <div className="App">
-      <UserState>
         <OutlookMail />
-      </UserState>
     </div>
   );
 }

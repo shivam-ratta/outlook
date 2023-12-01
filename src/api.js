@@ -43,8 +43,8 @@ instance.interceptors.response.use(
       },
     });
     if (error.response.status == 401) {
-      // localStorage.removeItem(process.env.REACT_APP_TOKEN);
-      // window.location.reload()
+      localStorage.removeItem(process.env.REACT_APP_TOKEN);
+      window.location.reload()
     }
     console.log("caught error", error);
     return Promise.reject(error);
@@ -55,22 +55,15 @@ const Api = {
   getUsers: async () => {
     return await instance.get(`/users`);
   },
-  checkAdminRole: async () => {
-    return await instance.get(`/me/memberOf`);
-  },
   searchMessages: async (encodedSearchSubject, userId) => {
-    console.log('encodedSearchSubject',encodedSearchSubject)
       return await instance.get(
         `/users/${userId}/messages?$search="subject:${encodedSearchSubject} OR from:${encodedSearchSubject}"`
       )
   },
 
  
-  getFolders: async (userId = undefined) => {
-    if (userId) {
+  getFolders: async (userId) => {
       return await instance.get(`/users/${userId}/mailFolders`);
-    }
-    return await instance.get(`/me/mailFolders`);
   },
   moveToFolder: async ( messageId, payload, userId,) => {
       return await instance.post(

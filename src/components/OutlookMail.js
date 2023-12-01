@@ -1,50 +1,44 @@
 import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
-import MicrosoftLogin from "react-microsoft-login";
 import moment from "moment";
 import Api from "../api";
 import * as sweetalert from "sweetalert";
 
+
+import { PublicClientApplication } from "@azure/msal-browser";
+
+const msalConfig = {
+  auth: {
+    clientId: 'your_client_id'
+  }
+};
+
+const msalInstance = new PublicClientApplication(msalConfig);
+await msalInstance.initialize();
 const OutlookMail = () => {
-  // Replace these values with your app's credentials
-  const clientId = process.env.REACT_APP_CLIENT_ID;
   const [searchSubject, setSearchSubject] = useState("");
   const [messages, setMessages] = useState([]);
   const [isSearched, setIsSearched] = useState(false);
   const [token, setToken] = useState("");
   const [timeFilter, setTimeFilter] = useState("");
-  const [trashFolderId, setTranshFolderId] = useState("");
-  const [selectedFolder, setSelectedFolder] = useState("");
-  const [folders, setFolders] = useState([]);
   const [users, setUsers] = useState([]);
-  const [selectedUser, setSelectedUser] = useState(null);
   const [selectAll, setSelectAll] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(0);
 
-  const getTrashFolder = () => {
-    Api.getFolders().then((res) => {
-      if (res?.data?.value) {
-        setTranshFolderId(
-          res.data.value.find((el) => el.displayName == "Deleted Items")?.id
-        );
-      }
-    });
-  };
 
   const getUsers = async () => {
     Api.getUsers()
       .then((response) => {
         if (response?.data?.value) {
-          console.log("List of users:", response.data.value);
+          // console.log("List of users:", response.data.value);
           setUsers(response.data.value);
-          let selectedUser = response.data.value.find(
-            (el) =>
-              el.id === localStorage.getItem(process.env.REACT_APP_USER_ID)
-          );
+          // let selectedUser = response.data.value.find(
+          //   (el) =>
+          //     el.id === localStorage.getItem(process.env.REACT_APP_USER_ID)
+          // );
           // console.log('localStorage.getItem(process.env.REACT_APP_USER_ID)',localStorage.getItem(process.env.REACT_APP_USER_ID))
           // console.log('selectedUser',selectedUser)
-          setSelectedUser(selectedUser);
+          // setSelectedUser(selectedUser);
         }
       })
       .catch((error) => {
@@ -53,92 +47,97 @@ const OutlookMail = () => {
   };
 
   const searchMessages = async () => {
+    setLoading(true)
     setSelectedMessages([]);
     setSelectAll(false);
     try {
       setIsSearched(true);
       const encodedSearchSubject = encodeURIComponent(searchSubject);
-      let promise;
-        let promises = [];
-        users.forEach((el) => {
-          promises.push(
-            Api.searchMessages(encodedSearchSubject, el?.id)
-              .then((res) => {
-                // Use Promise.all to wait for both searchMessages and getFolders to complete
-                return Promise.all([res, Api.getFolders(el?.id)]);
-              })
-              .then(([res, folders]) => {
-                console.log("folders?.data?.", folders?.data);
-                if (res?.data?.value) {
-                  // Use map to return an array of promises and then use Promise.all to wait for them
-                  const messages = res.data.value.map(async (message) => {
-                    return {
-                      userId: el.id,
-                      ...message,
-                      folders: folders?.data?.value ? folders?.data?.value : [],
-                    };
-                  });
-                  return Promise.all(messages);
-                }
-                return [];
-              })
-              .catch((error) => {
-                console.error(error);
-                return []; // Handle errors by returning an empty array
-              })
-          );
-        });
+      let promises = [];
+      users.forEach((el) => {
+        promises.push(
+          Api.searchMessages(encodedSearchSubject, el?.id)
+            .then((res) => {
+              // Use Promise.all to wait for both searchMessages and getFolders to complete
+              return Promise.all([res, Api.getFolders(el?.id)]);
+            })
+            .then(([res, folders]) => {
+              // console.log("folders?.data?.", folders?.data);
+              if (res?.data?.value) {
+                // Use map to return an array of promises and then use Promise.all to wait for them
+                const messages = res.data.value.map(async (message) => {
+                  return {
+                    userId: el.id,
+                    ...message,
+                    folders: folders?.data?.value ? folders?.data?.value : [],
+                  };
+                });
+                return Promise.all(messages);
+              }
+              return [];
+            })
+            .catch((error) => {
+              console.error(error);
+              return []; // Handle errors by returning an empty array
+            })
+        );
+      });
 
-        Promise.all(promises)
-          .then((userMessages) => {
-            // Flatten the array of arrays into a single array of messages
-            const flatMessages = userMessages.flat();
+      Promise.all(promises)
+        .then((userMessages) => {
+          // Flatten the array of arrays into a single array of messages
+          const flatMessages = userMessages.flat();
 
-            if (flatMessages.length) {
-              let filteredMessages = flatMessages;
-              console.log("filteredMessages", filteredMessages);
-              if (timeFilter.length) {
-                let filter = "";
+          if (flatMessages.length) {
+            let filteredMessages = flatMessages;
+            // console.log("filteredMessages", filteredMessages);
+            if (timeFilter.length) {
+              let filter = "";
 
-                // Use a switch statement for better readability
-                switch (timeFilter) {
-                  case "24hours":
-                    filter = moment().subtract(24, "hours").valueOf();
-                    break;
-                  case "48hours":
-                    filter = moment().subtract(48, "hours").valueOf();
-                    break;
-                  case "1week":
-                    filter = moment().subtract(1, "weeks").valueOf();
-                    break;
-                  case "2week":
-                    filter = moment().subtract(2, "weeks").valueOf();
-                    break;
-                  case "1month":
-                    filter = moment().subtract(1, "months").valueOf();
-                    break;
-                  default:
-                    break;
-                }
-
-                filteredMessages = filteredMessages.filter(
-                  (el) =>
-                    moment(el.receivedDateTime).valueOf() >= filter &&
-                    moment(el.receivedDateTime).valueOf() <= moment().valueOf()
-                );
+              // Use a switch statement for better readability
+              switch (timeFilter) {
+                case "24hours":
+                  filter = moment().subtract(24, "hours").valueOf();
+                  break;
+                case "48hours":
+                  filter = moment().subtract(48, "hours").valueOf();
+                  break;
+                case "1week":
+                  filter = moment().subtract(1, "weeks").valueOf();
+                  break;
+                case "2week":
+                  filter = moment().subtract(2, "weeks").valueOf();
+                  break;
+                case "1month":
+                  filter = moment().subtract(1, "months").valueOf();
+                  break;
+                default:
+                  break;
               }
 
-              setMessages(filteredMessages);
-            } else {
-              setMessages([]);
+              filteredMessages = filteredMessages.filter(
+                (el) =>
+                  moment(el.receivedDateTime).valueOf() >= filter &&
+                  moment(el.receivedDateTime).valueOf() <= moment().valueOf()
+              );
             }
-          })
-          .catch((error) => {
-            console.error(error);
-          });
-      
+
+            setMessages(filteredMessages);
+          } else {
+            setMessages([]);
+          }
+        })
+        .catch((error) => {
+          console.error(error);
+        }).finally(() => {
+          setLoading(false)
+        })
+
     } catch (error) {
       console.error("Error fetching messages:", error.message);
+      setLoading(false)
+    } finally {
+
     }
   };
 
@@ -147,31 +146,31 @@ const OutlookMail = () => {
       window.confirm("Are you sure you want to move these emails to trash?")
     ) {
       let movePromises;
-      if (isAdmin) {
-        const messageIds = selectedMessages.map((el) => ({
-          userId: messages[el].userId,
-          id: messages[el].id,
-          folderId: messages[el]?.folders.find(
-            (folder) => folder?.displayName === "Deleted Items"
-          )?.id,
-        }));
+      // if (isAdmin) {
+      const messageIds = selectedMessages.map((el) => ({
+        userId: messages[el].userId,
+        id: messages[el].id,
+        folderId: messages[el]?.folders.find(
+          (folder) => folder?.displayName === "Deleted Items"
+        )?.id,
+      }));
 
-        movePromises = messageIds.map((el) => {
-          const moveBody = {
-            destinationId: el.folderId,
-          };
-          return Api.moveToFolder(el.id, moveBody, el.userId);
-        });
-      } else {
-        const messageIds = selectedMessages.map((el) => messages[el].id);
+      movePromises = messageIds.map((el) => {
         const moveBody = {
-          destinationId: trashFolderId,
+          destinationId: el.folderId,
         };
+        return Api.moveToFolder(el.id, moveBody, el.userId);
+      });
+      // } else {
+      //   const messageIds = selectedMessages.map((el) => messages[el].id);
+      //   const moveBody = {
+      //     destinationId: trashFolderId,
+      //   };
 
-        movePromises = messageIds.map((messageId) => {
-          return Api.moveToFolder(messageId, moveBody);
-        });
-      }
+      //   movePromises = messageIds.map((messageId) => {
+      //     return Api.moveToFolder(messageId, moveBody);
+      //   });
+      // }
 
       await axios
         .all(movePromises)
@@ -205,48 +204,22 @@ const OutlookMail = () => {
   useEffect(() => {
     if (!mounted.current) {
       mounted.current = true;
-      if (localStorage.getItem(process.env.REACT_APP_TOKEN)) {
+      if (localStorage.getItem(process.env.REACT_APP_TOKEN) !== null) {
         setToken(localStorage.getItem(process.env.REACT_APP_TOKEN));
         getUsers();
-        // checkAdminRole();
       }
     }
   }, []);
 
-  const authHandler = (err, data) => {
-    console.log("user data", data);
-    if (data?.accessToken) {
-      localStorage.setItem(process.env.REACT_APP_TOKEN, data.accessToken);
-      localStorage.setItem(process.env.REACT_APP_USER_ID, data.uniqueId);
-      setToken(data?.accessToken);
-      setTimeout(() => {
-        // checkAdminRole();
-        getUsers();
-      }, 2000);
-    }
-  };
-
-  const checkAdminRole = () => {
-    Api.checkAdminRole()
-      .then((response) => {
-        if (
-          response?.data.value?.length &&
-          response?.data.value[0].displayName === "Global Administrator"
-        ) {
-          setIsAdmin(true);
-        } else {
-          setIsAdmin(false);
-          getTrashFolder();
-        }
-      })
-      .catch((error) => {
-        console.error("Error getting the list of users:", error);
-      });
-  };
 
   const logout = () => {
     localStorage.removeItem(process.env.REACT_APP_TOKEN);
     setToken("");
+    setUsers([])
+    setMessages([])
+    setIsSearched(false)
+    setTimeFilter('')
+    setSearchSubject('')
   };
 
   useEffect(() => {
@@ -281,32 +254,40 @@ const OutlookMail = () => {
   };
 
   const login = () => {
-    const clientId = process.env.REACT_APP_CLIENT_ID;
-    const tenantId = process.env.REACT_APP_TENANT_ID;
-    const clientSecret = process.env.REACT_APP_CLIENT_SECRET;
-
-    const url = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
-
-    const data = new URLSearchParams();
-    data.append("client_id", clientId);
-    data.append("scope", "https://graph.microsoft.com/.default");
-    data.append("client_secret", clientSecret);
-    data.append("grant_type", "client_credentials");
-
+    setLoading(true)
+    const url = `${process.env.REACT_APP_BACKEND_API_URL}/login`;
     axios
-      .post(url, data, {
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-      })
+      .get(url)
       .then((response) => {
-        console.log("Access Token:", response.data.access_token);
+        if (response?.data?.access_token) {
+          localStorage.setItem(process.env.REACT_APP_TOKEN, response?.data?.access_token)
+          setToken(response?.data?.access_token);
+          setTimeout(() => {
+            getUsers();
+          }, 2000);
+        }
       })
       .catch((error) => {
         console.error("Error:", error);
+        sweetalert({
+          title: "Error!",
+          text: error?.response?.data?.message
+            ? error?.response?.data?.message
+            : "An error occurred",
+          icon: "error",
+          buttons: {
+            confirm: {
+              text: "Close",
+              value: true,
+              visible: true,
+              className: "btn bg-gradient-danger mx-auto",
+              closeModal: true,
+            },
+          },
+        })
+      }).finally(() => {
+        setLoading(false)
       });
-
-      
   };
 
   return (
@@ -316,8 +297,11 @@ const OutlookMail = () => {
           className="d-flex align-items-center justify-content-center"
           style={{ height: "100vh" }}
         >
-          {/* <MicrosoftLogin clientId={clientId} authCallback={authHandler} /> */}
-          <button className="btn btn-primary" onClick={login}>login</button>
+          <button disabled={loading} className="btn btn-primary" onClick={login}>
+            {loading ? <>
+              Logging in...  <i className="fa-solid fa-circle-notch fa-spin"></i>
+            </> : 'Login'}
+          </button>
         </div>
       ) : (
         <>
@@ -420,37 +404,12 @@ const OutlookMail = () => {
                         </select>
                       </div>
 
-                      <div className="dropdown">
-                        <button
-                          className="btn border-secondary rounded-circle user-icon-btn dropdown-toggle"
-                          type="button"
-                          id="dropdownMenuButton1"
-                          data-bs-toggle="dropdown"
-                          aria-expanded="false"
-                        >
-                          <i className="fa fa-user"></i>
-                        </button>
-                        <ul
-                          className="dropdown-menu"
-                          aria-labelledby="dropdownMenuButton1"
-                        >
-                          <li className="dropdown-item">
-                            Name:{selectedUser?.displayName}
-                          </li>
-                          <li className="dropdown-item">
-                            {" "}
-                            Email: {selectedUser?.mail}
-                          </li>
-                          <li className="dropdown-item">
-                            <button
-                              onClick={logout}
-                              className="btn btn-danger me-2"
-                            >
-                              Logout
-                            </button>
-                          </li>
-                        </ul>
-                      </div>
+                      <button
+                        onClick={logout}
+                        className="btn btn-danger me-2"
+                      >
+                        Logout
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -463,55 +422,69 @@ const OutlookMail = () => {
               style={{ minHeight: "100vh" }}
             >
               <div className="col-12">
-                {messages.length > 0 &&
-                  messages.map((el, i) => (
-                    <div
-                      className="message-item border-bottom text-start p-3 d-flex align-items-center justify-content-center"
-                      key={i}
-                    >
-                      <div className="col-1 d-flex align-items-center justify-content-center">
-                        <div className="form-check">
-                          <input
-                            className="form-check-input"
-                            checked={selectAll || selectedMessages.includes(i)}
-                            onChange={() => handleCheckboxChange(i)}
-                            type="checkbox"
-                            value=""
-                            id={`flexCheckDefault${i}`}
-                          />
-                        </div>
-                      </div>
-                      <div className="col-11">
-                        <div className="text-sm row">
-                          <div className="col-6">
-                            {el?.sender?.emailAddress?.name || "No name"}
-                          </div>
-                          <div className="text-primary col-6 text-end text-sm">
-                            {moment(el?.receivedDateTime).format("lll")}
-                          </div>
-                        </div>
-                        <div className="text-sm text-primary">
-                          {el?.subject || "No Subject"}
-                        </div>
-                        <div className="text-sm text-ellipsis">
-                          {el?.bodyPreview || "No body"}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                {messages.length === 0 && (
-                  <div className="message-item border-bottom text-start p-3">
-                    <div className="d-flex align-items-center justify-content-center">
-                      <div className="col-12">
-                        <div className="text-sm row">
-                          <div className="col-12 text-center">
-                            No Emails Found
-                          </div>
+                {loading ? <div className="message-item border-bottom text-start p-3">
+                  <div className="d-flex align-items-center justify-content-center">
+                    <div className="col-12">
+                      <div className="text-sm row">
+                        <div className="col-12 text-center text-dark">
+                          Loading...  <i className="fa-solid fa-circle-notch fa-spin"></i>
                         </div>
                       </div>
                     </div>
                   </div>
-                )}
+                </div> :
+                  <>
+                    {messages.length > 0 &&
+                      messages.map((el, i) => (
+                        <div
+                          className="message-item border-bottom text-start p-3 d-flex align-items-center justify-content-center"
+                          key={i}
+                        >
+                          <div className="col-1 d-flex align-items-center justify-content-center">
+                            <div className="form-check">
+                              <input
+                                className="form-check-input"
+                                checked={selectAll || selectedMessages.includes(i)}
+                                onChange={() => handleCheckboxChange(i)}
+                                type="checkbox"
+                                value=""
+                                id={`flexCheckDefault${i}`}
+                              />
+                            </div>
+                          </div>
+                          <div className="col-11">
+                            <div className="text-sm row">
+                              <div className="col-6">
+                                {el?.sender?.emailAddress?.name || "No name"}
+                              </div>
+                              <div className="text-primary col-6 text-end text-sm">
+                                {moment(el?.receivedDateTime).format("lll")}
+                              </div>
+                            </div>
+                            <div className="text-sm text-primary">
+                              {el?.subject || "No Subject"}
+                            </div>
+                            <div className="text-sm text-ellipsis">
+                              {el?.bodyPreview || "No body"}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    {messages.length === 0 && (
+                      <div className="message-item border-bottom text-start p-3">
+                        <div className="d-flex align-items-center justify-content-center">
+                          <div className="col-12">
+                            <div className="text-sm row">
+                              <div className="col-12 text-center">
+                                No Emails Found
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                }
               </div>
             </div>
           </div>
