@@ -3,22 +3,17 @@ import axios from "axios";
 
 const baseURL = process.env.REACT_APP_API_URL;
 
-const accessToken = () => {return localStorage.getItem(process.env.REACT_APP_TOKEN)}
+const accessTokens = () => {
+  return JSON.parse(localStorage.getItem(process.env.REACT_APP_TOKEN));
+};
 
 const instance = axios.create({
   baseURL: baseURL,
   headers: {
-    Authorization: `Bearer ${accessToken()}`,
+    // Authorization: `Bearer `,
     Accept: "application/json",
     "Content-Type": "application/json",
   },
-});
-
-instance.interceptors.request.use((config) => {
-  const token = accessToken();
-  if (token && config.headers) config.headers.Authorization = `Bearer ${token}`;
-  config.validateStatus = (status) => status < 400;
-  return config;
 });
 
 instance.interceptors.response.use(
@@ -44,7 +39,7 @@ instance.interceptors.response.use(
     });
     if (error.response.status == 401) {
       localStorage.removeItem(process.env.REACT_APP_TOKEN);
-      window.location.reload()
+      window.location.reload();
     }
     console.log("caught error", error);
     return Promise.reject(error);
@@ -53,23 +48,56 @@ instance.interceptors.response.use(
 
 const Api = {
   getUsers: async () => {
-    return await instance.get(`/users`);
+    const tokens = accessTokens();
+    let usersData = [];
+    const userRequests = tokens.map(async (token) => {
+      try {
+        instance.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+
+        const response = await instance.get(`/users`);
+        let users = response?.data?.value;
+        // eslint-disable-next-line array-callback-return
+        const usersTokens = users.map((user) => {
+          user.token = token;
+        });
+
+        Promise.all(usersTokens)
+          .then(() => {
+            usersData = usersData.concat(response?.data?.value);
+          })
+          .catch((err) => {
+            console.error(err);
+          });
+      } catch (error) {
+        console.error(error);
+      }
+    });
+    // return await instance.get(`/users`);
+    return Promise.all(userRequests)
+      .then(() => {
+        return { users: usersData };
+      })
+      .catch((err) => {
+        console.error(err);
+      });
   },
-  searchMessages: async (encodedSearchSubject, userId) => {
-      return await instance.get(
-        `/users/${userId}/messages?$search="subject:${encodedSearchSubject} OR from:${encodedSearchSubject}"`
-      )
+  searchMessages: async (encodedSearchSubject, userId, token) => {
+    instance.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    return await instance.get(
+      `/users/${userId}/messages?$search="subject:${encodedSearchSubject} OR from:${encodedSearchSubject}"`
+    );
   },
 
- 
-  getFolders: async (userId) => {
-      return await instance.get(`/users/${userId}/mailFolders`);
+  getFolders: async (userId, token) => {
+    instance.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    return await instance.get(`/users/${userId}/mailFolders`);
   },
-  moveToFolder: async ( messageId, payload, userId,) => {
-      return await instance.post(
-        `/users/${userId}/messages/${messageId}/move`,
-        payload
-      );
+  moveToFolder: async (messageId, payload, userId, token) => {
+    instance.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    return await instance.post(
+      `/users/${userId}/messages/${messageId}/move`,
+      payload
+    );
   },
 };
 

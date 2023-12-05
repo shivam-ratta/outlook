@@ -3,42 +3,28 @@ import axios from "axios";
 import moment from "moment";
 import Api from "../api";
 import * as sweetalert from "sweetalert";
+import ReactPaginate from 'react-paginate';
 
 
-import { PublicClientApplication } from "@azure/msal-browser";
 
-const msalConfig = {
-  auth: {
-    clientId: 'your_client_id'
-  }
-};
-
-const msalInstance = new PublicClientApplication(msalConfig);
-await msalInstance.initialize();
 const OutlookMail = () => {
   const [searchSubject, setSearchSubject] = useState("");
   const [messages, setMessages] = useState([]);
   const [isSearched, setIsSearched] = useState(false);
-  const [token, setToken] = useState("");
+  const [token, setToken] = useState([]);
   const [timeFilter, setTimeFilter] = useState("");
   const [users, setUsers] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
   const [loading, setLoading] = useState(0);
+  const [page, setPage] = useState(0)
+  const [limit, setLimit] = useState(50)
 
 
   const getUsers = async () => {
     Api.getUsers()
       .then((response) => {
-        if (response?.data?.value) {
-          // console.log("List of users:", response.data.value);
-          setUsers(response.data.value);
-          // let selectedUser = response.data.value.find(
-          //   (el) =>
-          //     el.id === localStorage.getItem(process.env.REACT_APP_USER_ID)
-          // );
-          // console.log('localStorage.getItem(process.env.REACT_APP_USER_ID)',localStorage.getItem(process.env.REACT_APP_USER_ID))
-          // console.log('selectedUser',selectedUser)
-          // setSelectedUser(selectedUser);
+        if (response?.users) {
+          setUsers(response?.users);
         }
       })
       .catch((error) => {
@@ -46,7 +32,12 @@ const OutlookMail = () => {
       });
   };
 
+  const handlePageClick = (event) => {
+    setPage(event.selected)
+  }
+
   const searchMessages = async () => {
+    setPage(0)
     setLoading(true)
     setSelectedMessages([]);
     setSelectAll(false);
@@ -56,10 +47,10 @@ const OutlookMail = () => {
       let promises = [];
       users.forEach((el) => {
         promises.push(
-          Api.searchMessages(encodedSearchSubject, el?.id)
+          Api.searchMessages(encodedSearchSubject, el?.id, el?.token)
             .then((res) => {
               // Use Promise.all to wait for both searchMessages and getFolders to complete
-              return Promise.all([res, Api.getFolders(el?.id)]);
+              return Promise.all([res, Api.getFolders(el?.id, el?.token)]);
             })
             .then(([res, folders]) => {
               // console.log("folders?.data?.", folders?.data);
@@ -67,6 +58,7 @@ const OutlookMail = () => {
                 // Use map to return an array of promises and then use Promise.all to wait for them
                 const messages = res.data.value.map(async (message) => {
                   return {
+                    token: el?.token,
                     userId: el.id,
                     ...message,
                     folders: folders?.data?.value ? folders?.data?.value : [],
@@ -148,6 +140,7 @@ const OutlookMail = () => {
       let movePromises;
       // if (isAdmin) {
       const messageIds = selectedMessages.map((el) => ({
+        token: messages[el]?.token,
         userId: messages[el].userId,
         id: messages[el].id,
         folderId: messages[el]?.folders.find(
@@ -159,7 +152,7 @@ const OutlookMail = () => {
         const moveBody = {
           destinationId: el.folderId,
         };
-        return Api.moveToFolder(el.id, moveBody, el.userId);
+        return Api.moveToFolder(el.id, moveBody, el.userId, el?.token);
       });
       // } else {
       //   const messageIds = selectedMessages.map((el) => messages[el].id);
@@ -205,7 +198,7 @@ const OutlookMail = () => {
     if (!mounted.current) {
       mounted.current = true;
       if (localStorage.getItem(process.env.REACT_APP_TOKEN) !== null) {
-        setToken(localStorage.getItem(process.env.REACT_APP_TOKEN));
+        setToken(JSON.parse(localStorage.getItem(process.env.REACT_APP_TOKEN)));
         getUsers();
       }
     }
@@ -220,6 +213,7 @@ const OutlookMail = () => {
     setIsSearched(false)
     setTimeFilter('')
     setSearchSubject('')
+    setPage(0)
   };
 
   useEffect(() => {
@@ -259,9 +253,9 @@ const OutlookMail = () => {
     axios
       .get(url)
       .then((response) => {
-        if (response?.data?.access_token) {
-          localStorage.setItem(process.env.REACT_APP_TOKEN, response?.data?.access_token)
-          setToken(response?.data?.access_token);
+        if (response?.data?.access_tokens) {
+          localStorage.setItem(process.env.REACT_APP_TOKEN, JSON.stringify(response?.data?.access_tokens))
+          setToken(response?.data?.access_tokens);
           setTimeout(() => {
             getUsers();
           }, 2000);
@@ -292,7 +286,7 @@ const OutlookMail = () => {
 
   return (
     <div>
-      {token === "" ? (
+      {token.length == 0 ? (
         <div
           className="d-flex align-items-center justify-content-center"
           style={{ height: "100vh" }}
@@ -435,7 +429,8 @@ const OutlookMail = () => {
                 </div> :
                   <>
                     {messages.length > 0 &&
-                      messages.map((el, i) => (
+                      <>
+                      {messages.slice(page * limit, page * limit + limit).map((el, i) => (
                         <div
                           className="message-item border-bottom text-start p-3 d-flex align-items-center justify-content-center"
                           key={i}
@@ -470,6 +465,29 @@ const OutlookMail = () => {
                           </div>
                         </div>
                       ))}
+                      { limit < messages?.length &&
+                        <ReactPaginate
+                            nextLabel={<i className="fa-solid fa-angle-right"></i>}
+                            onPageChange={handlePageClick}
+                            pageRangeDisplayed={5}
+                            pageCount={Math.ceil(messages?.length / limit)}
+                            previousLabel={<i className="fa-solid fa-angle-left"></i>}
+                            renderOnZeroPageCount={null}
+                            pageClassName="page-item"
+                            pageLinkClassName="page-link"
+                            previousClassName="page-item"
+                            previousLinkClassName="page-link"
+                            nextClassName="page-item"
+                            nextLinkClassName="page-link"
+                            breakLabel="..."
+                            breakClassName="page-item"
+                            breakLinkClassName="page-link"
+                            containerClassName="pagination justify-content-center my-4"
+                            activeClassName="active"
+                          />
+                      }
+                      </>
+                    }
                     {messages.length === 0 && (
                       <div className="message-item border-bottom text-start p-3">
                         <div className="d-flex align-items-center justify-content-center">
