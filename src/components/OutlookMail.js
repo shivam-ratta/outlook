@@ -18,6 +18,11 @@ const OutlookMail = () => {
   const [loading, setLoading] = useState(0);
   const [page, setPage] = useState(0)
   const [limit, setLimit] = useState(50)
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [tenantId, setTenantId] = useState("");
+  const [showLogin, setShowLogin] = useState(true)
+  const [allCredentials, setAllCredentials] = useState([])
 
 
   const getUsers = async () => {
@@ -194,13 +199,22 @@ const OutlookMail = () => {
   };
 
   let mounted = useRef(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!mounted.current) {
-      mounted.current = true;
       if (localStorage.getItem(process.env.REACT_APP_TOKEN) !== null) {
         setToken(JSON.parse(localStorage.getItem(process.env.REACT_APP_TOKEN)));
         getUsers();
       }
+
+      handleIndexDb('getAll').then((credentials) => {
+        if(credentials.length === 0) {
+          setShowLogin(false)
+        }
+        setAllCredentials(credentials);
+        console.log('credentials -: ', credentials)
+      })
+      mounted.current = true;
     }
   }, []);
 
@@ -247,41 +261,108 @@ const OutlookMail = () => {
     setSelectAll(false);
   };
 
-  const login = () => {
-    setLoading(true)
-    const url = `${process.env.REACT_APP_BACKEND_API_URL}/login`;
-    axios
-      .get(url)
-      .then((response) => {
-        if (response?.data?.access_tokens) {
-          localStorage.setItem(process.env.REACT_APP_TOKEN, JSON.stringify(response?.data?.access_tokens))
-          setToken(response?.data?.access_tokens);
-          setTimeout(() => {
-            getUsers();
-          }, 2000);
+  const handleIndexDb = (credentials) => {
+    return new Promise((resolve) => {
+      var indexedDB = window.indexedDB || window.mozIndexedDB || window.webkitIndexedDB || window.msIndexedDB || window.shimIndexedDB;
+      let openRequest = indexedDB.open("outlookCredentialsLocalDb", 1);
+
+      openRequest.onupgradeneeded = function() {
+        // triggers if the client had no database
+        // ...perform initialization...
+        var db = openRequest.result;
+        var store = db.createObjectStore("outlookCredentials", {keyPath: "CLIENT_ID"});
+        console.log('onupgradeneeded store -: ', store)
+        // var index = store.createIndex("NameIndex", ["name.last", "name.first"]);
+      };
+
+      openRequest.onerror = function() {
+        console.error("Error", openRequest.error);
+      };
+
+      openRequest.onsuccess = function() {
+        let db = openRequest.result;
+        // continue working with database using db object
+        var tx = db.transaction("outlookCredentials", "readwrite");
+        var store = tx.objectStore("outlookCredentials");
+
+        if(credentials !== 'getAll') {
+          store.put(credentials);
         }
-      })
-      .catch((error) => {
-        console.error("Error:", error);
+
+        var getCredentials = store.getAll();
+
+        getCredentials.onsuccess = function() {
+          console.log('getAll -: ',getCredentials.result); 
+          resolve(getCredentials.result)
+        };
+        
+        // Close the db when the transaction is done
+        openRequest.oncomplete = function() {
+          db.close();
+        };
+      };
+    });
+  }
+
+  const addMoreCredentials = async () => {
+    if(clientId && clientSecret && tenantId) {
+      await handleIndexDb({CLIENT_ID: clientId, CLIENT_SECRET: clientSecret, TENANT_ID: tenantId}).then((credentials) => {
+        console.log('res -: ', credentials)
+        setAllCredentials(credentials)
+        setClientId('');
+        setClientSecret('');
+        setTenantId('');
         sweetalert({
-          title: "Error!",
-          text: error?.response?.data?.message
-            ? error?.response?.data?.message
-            : "An error occurred",
-          icon: "error",
+          title: "Success",
+          text: "Credentials Added",
+          icon: "success",
           buttons: {
             confirm: {
-              text: "Close",
+              text: "Ok",
               value: true,
               visible: true,
-              className: "btn bg-gradient-danger mx-auto",
+              className: "btn bg-gradient-success mx-auto",
               closeModal: true,
             },
           },
-        })
-      }).finally(() => {
-        setLoading(false)
-      });
+        });
+      })
+    }
+  }
+
+  const login = async () => {
+    setLoading(true)
+    const url = `${process.env.REACT_APP_BACKEND_API_URL}/login`;
+    axios.post(url, {credentials: allCredentials}).then((response) => {
+      if (response?.data?.access_tokens) {
+        localStorage.setItem(process.env.REACT_APP_TOKEN, JSON.stringify(response?.data?.access_tokens))
+        setToken(response?.data?.access_tokens);
+        setTimeout(() => {
+          getUsers();
+        }, 2000);
+      }
+    })
+    .catch((error) => {
+      console.error("Error:", error);
+      sweetalert({
+        title: "Error!",
+        text: error?.response?.data?.message
+          ? error?.response?.data?.message
+          : "An error occurred",
+        icon: "error",
+        buttons: {
+          confirm: {
+            text: "Close",
+            value: true,
+            visible: true,
+            className: "btn bg-gradient-danger mx-auto",
+            closeModal: true,
+          },
+        },
+      })
+    }).finally(() => {
+      setLoading(false)
+    });
   };
 
   return (
@@ -291,11 +372,68 @@ const OutlookMail = () => {
           className="d-flex align-items-center justify-content-center"
           style={{ height: "100vh" }}
         >
-          <button disabled={loading} className="btn btn-primary" onClick={login}>
-            {loading ? <>
-              Logging in...  <i className="fa-solid fa-circle-notch fa-spin"></i>
-            </> : 'Login'}
-          </button>
+          <div className="me-2 my-2 d-inline-block position-relative">
+            { showLogin ?
+              <>
+                <button disabled={loading} className="btn btn-primary" onClick={login}>
+                  {loading ? <>
+                    Logging in...  <i className="fa-solid fa-circle-notch fa-spin"></i>
+                  </> : 'Login'}
+                </button>
+                <div onClick={() => setShowLogin(!showLogin)} className="text-primary mt-3 cursor-pointer hover-underline">Add More Credentials</div>
+              </>
+              :
+              <>
+                <div className="mb-3">
+                  <div htmlFor="client_id" className="form-label text-start">Client Id</div>
+                  <input
+                    type="text"
+                    className="form-control loginInput mx-auto"
+                    id="client_id"
+                    placeholder="Client Id"
+                    value={clientId}
+                    onInput={(e) => {
+                      setClientId(e.target.value);
+                    }}
+                  />
+                </div>
+                <div className="mb-3">
+                  <div htmlFor="client_secret" className="form-label text-start">Client Secret</div>
+                  <input
+                    type="text"
+                    className="form-control loginInput mx-auto"
+                    id="client_secret"
+                    placeholder="Client Secret"
+                    value={clientSecret}
+                    onInput={(e) => {
+                      setClientSecret(e.target.value);
+                    }}
+                  />
+                </div>
+                <div className="mb-3">
+                  <div htmlFor="tenant_id" className="form-label text-start">Tenant Id</div>
+                  <input
+                    type="text"
+                    className="form-control loginInput mx-auto"
+                    id="tenant_id"
+                    placeholder="Tenant Id"
+                    value={tenantId}
+                    onInput={(e) => {
+                      setTenantId(e.target.value);
+                    }}
+                  />
+                </div>
+                <button disabled={loading} className="btn btn-success ms-3" onClick={addMoreCredentials}>
+                  {loading ? <>
+                    Add Credentials...  <i className="fa-solid fa-circle-notch fa-spin"></i>
+                  </> : 'Add Credentials'}
+                </button>
+                { allCredentials.length > 0 &&
+                  <div onClick={() => setShowLogin(!showLogin)} className="text-primary mt-3 cursor-pointer hover-underline">Login Page</div>
+                }
+              </>
+            }
+          </div>
         </div>
       ) : (
         <>
@@ -456,8 +594,14 @@ const OutlookMail = () => {
                                 {moment(el?.receivedDateTime).format("lll")}
                               </div>
                             </div>
-                            <div className="text-sm text-primary">
-                              {el?.subject || "No Subject"}
+                            <div className="text-sm">
+                              From: <span className="text-primary">{el?.from?.emailAddress?.address || "No From"}</span>
+                            </div>
+                            <div className="text-sm">
+                              To: <span className="text-primary">{el?.toRecipients.map((to, index) => to?.emailAddress?.address + (el?.toRecipients?.length !== (index + 1) && ', '))}</span>
+                            </div>
+                            <div className="text-sm">
+                              Subject: <span className="text-primary">{el?.subject || "No Subject"}</span>
                             </div>
                             <div className="text-sm text-ellipsis">
                               {el?.bodyPreview || "No body"}

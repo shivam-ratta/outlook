@@ -25,6 +25,10 @@ code {
 .searchInput {
   width: 350px!important;
 }
+
+.loginInput {
+  width: 450px!important;
+}
 .cursor-pointer {
   cursor: pointer ;
 }
@@ -39,6 +43,10 @@ code {
 
 .user-icon-btn::after {
   display: none!important;
+}
+
+.hover-underline:hover {
+  text-decoration: underline;
 }
 
 @media only screen and (max-width:991px) {
