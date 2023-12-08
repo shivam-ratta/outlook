@@ -304,6 +304,37 @@ const OutlookMail = () => {
     });
   }
 
+  const deleteCredentials = (credentials) => {
+    var indexedDB = window.indexedDB || window.mozIndexedDB || window.webkitIndexedDB || window.msIndexedDB || window.shimIndexedDB;
+    let openRequest = indexedDB.open("outlookCredentialsLocalDb", 1);
+
+    openRequest.onerror = function() {
+      console.error("Error", openRequest.error);
+    };
+
+    openRequest.onsuccess = function() {
+      let db = openRequest.result;
+      // continue working with database using db object
+      var tx = db.transaction("outlookCredentials", "readwrite");
+      var store = tx.objectStore("outlookCredentials");
+
+      var deleteCredentials = store.delete(credentials?.CLIENT_ID);
+
+      deleteCredentials.onsuccess = function() {
+        var getCredentials = store.getAll();
+
+        getCredentials.onsuccess = function() {
+          console.log('getAll -: ',getCredentials.result); 
+          setAllCredentials(getCredentials.result)
+        };
+      };
+
+      // Close the db when the transaction is done
+      openRequest.oncomplete = function() {
+        db.close();
+      };
+    }
+  }
   const addMoreCredentials = async () => {
     if(clientId && clientSecret && tenantId) {
       await handleIndexDb({CLIENT_ID: clientId, CLIENT_SECRET: clientSecret, TENANT_ID: tenantId}).then((credentials) => {
@@ -369,8 +400,7 @@ const OutlookMail = () => {
     <div>
       {token.length == 0 ? (
         <div
-          className="d-flex align-items-center justify-content-center"
-          style={{ height: "100vh" }}
+          className={`d-flex align-items-center justify-content-center ${ allCredentials.length === 0 || showLogin ? 'vh-100' : 'my-5' } `}
         >
           <div className="me-2 my-2 d-inline-block position-relative">
             { showLogin ?
@@ -429,7 +459,33 @@ const OutlookMail = () => {
                   </> : 'Add Credentials'}
                 </button>
                 { allCredentials.length > 0 &&
-                  <div onClick={() => setShowLogin(!showLogin)} className="text-primary mt-3 cursor-pointer hover-underline">Login Page</div>
+                  <>
+                    <div onClick={() => setShowLogin(!showLogin)} className="text-primary mt-3 cursor-pointer hover-underline">Login Page</div>
+                    <table className="table mt-5">
+                      <thead>
+                        <tr>
+                          <th scope="col">#</th>
+                          <th scope="col">Credentials</th>
+                          <th scope="col">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {
+                          allCredentials.map((credentials, index) => (
+                            <tr className="text-start">
+                              <th scope="row">{index + 1}</th>
+                              <td>
+                                <span className="text-primary">CLIENT_ID:</span> <span className="text-danger">{ credentials.CLIENT_ID }</span><br/>
+                                <span className="text-primary">CLIENT_SECRET:</span> <span className="text-danger">{ credentials.CLIENT_SECRET }</span><br/>
+                                <span className="text-primary">TENANT_ID:</span> <span className="text-danger">{ credentials.TENANT_ID }</span><br/>
+                              </td>
+                              <td><button onClick={() => deleteCredentials(credentials)} type="button" className="btn btn-danger ms-5">Delete</button></td>
+                            </tr>
+                          ))
+                        }
+                      </tbody>
+                    </table>
+                  </>
                 }
               </>
             }

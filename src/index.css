@@ -27,7 +27,7 @@ code {
 }
 
 .loginInput {
-  width: 450px!important;
+  min-width: 450px!important;
 }
 .cursor-pointer {
   cursor: pointer ;
