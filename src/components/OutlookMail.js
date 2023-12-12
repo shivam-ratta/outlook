@@ -18,6 +18,7 @@ const OutlookMail = () => {
   const [loading, setLoading] = useState(0);
   const [page, setPage] = useState(0)
   const [limit, setLimit] = useState(50)
+  const [organization, setOrganization] = useState("");
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [tenantId, setTenantId] = useState("");
@@ -336,10 +337,11 @@ const OutlookMail = () => {
     }
   }
   const addMoreCredentials = async () => {
-    if(clientId && clientSecret && tenantId) {
-      await handleIndexDb({CLIENT_ID: clientId, CLIENT_SECRET: clientSecret, TENANT_ID: tenantId}).then((credentials) => {
+    if(organization && clientId && clientSecret && tenantId) {
+      await handleIndexDb({Organization: organization, CLIENT_ID: clientId, CLIENT_SECRET: clientSecret, TENANT_ID: tenantId}).then((credentials) => {
         console.log('res -: ', credentials)
         setAllCredentials(credentials)
+        setOrganization('')
         setClientId('');
         setClientSecret('');
         setTenantId('');
@@ -415,6 +417,19 @@ const OutlookMail = () => {
               :
               <>
                 <div className="mb-3">
+                  <div htmlFor="client_id" className="form-label text-start">Organization</div>
+                  <input
+                    type="text"
+                    className="form-control loginInput mx-auto"
+                    id="organization"
+                    placeholder="Organization"
+                    value={organization}
+                    onInput={(e) => {
+                      setOrganization(e.target.value);
+                    }}
+                  />
+                </div>
+                <div className="mb-3">
                   <div htmlFor="client_id" className="form-label text-start">Client Id</div>
                   <input
                     type="text"
@@ -475,9 +490,9 @@ const OutlookMail = () => {
                             <tr className="text-start">
                               <th scope="row">{index + 1}</th>
                               <td>
-                                <span className="text-primary">CLIENT_ID:</span> <span className="text-danger">{ credentials.CLIENT_ID }</span><br/>
-                                <span className="text-primary">CLIENT_SECRET:</span> <span className="text-danger">{ credentials.CLIENT_SECRET }</span><br/>
-                                <span className="text-primary">TENANT_ID:</span> <span className="text-danger">{ credentials.TENANT_ID }</span><br/>
+                              <span className="text-primary">Organization:</span> <span className="text-danger">{ credentials?.Organization }</span><br/>
+                                <span className="text-primary">CLIENT_ID:</span> <span className="text-danger">{ credentials?.CLIENT_ID }</span><br/>
+                                <span className="text-primary">TENANT_ID:</span> <span className="text-danger">{ credentials?.TENANT_ID }</span><br/>
                               </td>
                               <td><button onClick={() => deleteCredentials(credentials)} type="button" className="btn btn-danger ms-5">Delete</button></td>
                             </tr>
